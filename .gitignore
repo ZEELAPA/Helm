@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Production Build Folders (Don't upload .exe or compiled code)
+dist/
+out/
+build/
+release/
+
+# Local Environment Variables (Security risk to upload)
+.env
+.env.local
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Electron-specific
+*.log
+node_modules
