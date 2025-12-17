@@ -1,13 +1,14 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { PictureInPicture } from 'lucide-react'
 import { Play, Pause, RotateCcw, Bell, ChevronUp, ChevronDown, ArrowRight, Music } from 'lucide-react'
 
-// Note: Removed useAudio import. The timer logic in App.jsx handles the sound now.
-
-const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut }) => {  // <--- Added settings prop
-  // Editable Session Name State
+const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut }) => {
   const [sessionName, setSessionName] = useState("Freestyle Session")
+  
+  // --- DRAG STATE ---
+  const [isDragging, setIsDragging] = useState(false)
+  const dragAccumulator = useRef(0) // Tracks pixel movement
 
   const { 
       totalBank, currentSlice, isActive, mode, 
@@ -24,6 +25,55 @@ const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut 
     if (totalBank <= currentSlice) return "FINISH"
     return mode === 'FOCUS' ? `BREAK (${breakDuration}m)` : `FOCUS (${defaultDuration}m)`
   }
+
+  // --- DRAG HANDLERS ---
+  const handleMouseDown = (e) => {
+      if (isActive) return // Lock when running
+      setIsDragging(true)
+      dragAccumulator.current = 0
+      document.body.style.cursor = 'ns-resize' // Change cursor globally
+  }
+
+  const handleMouseUp = () => {
+      setIsDragging(false)
+      document.body.style.cursor = 'default' // Reset cursor
+  }
+
+  const handleMouseMove = (e) => {
+      if (!isDragging) return
+
+      // Accumulate vertical movement
+      dragAccumulator.current += e.movementY
+      
+      const SENSITIVITY = 15 // Pixels to move to change 1 minute
+
+      // Dragging UP (Negative Y) -> Increase Time
+      if (dragAccumulator.current <= -SENSITIVITY) {
+          adjustBank(-60)
+          dragAccumulator.current = 0 // Reset bucket
+      }
+      
+      // Dragging DOWN (Positive Y) -> Decrease Time
+      if (dragAccumulator.current >= SENSITIVITY) {
+          adjustBank(60)
+          dragAccumulator.current = 0 // Reset bucket
+      }
+  }
+
+  // Attach global listeners so dragging works even if mouse leaves the div
+  useEffect(() => {
+      if (isDragging) {
+          window.addEventListener('mouseup', handleMouseUp)
+          window.addEventListener('mousemove', handleMouseMove)
+      } else {
+          window.removeEventListener('mouseup', handleMouseUp)
+          window.removeEventListener('mousemove', handleMouseMove)
+      }
+      return () => {
+          window.removeEventListener('mouseup', handleMouseUp)
+          window.removeEventListener('mousemove', handleMouseMove)
+      }
+  }, [isDragging])
 
   return (
     <motion.div 
@@ -49,7 +99,6 @@ const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut 
           <span className="text-[10px] opacity-0 group-hover:opacity-100 transition">POP OUT</span>
         </button>
          
-         {/* Editable Session Name */}
          <input 
             type="text"
             value={sessionName}
@@ -58,31 +107,32 @@ const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut 
          />
       </div>
 
-      {/* The Big Clock */}
+      {/* --- THE DRAGGABLE CLOCK AREA --- */}
       <div 
-        className="relative group cursor-ns-resize flex flex-col items-center mt-8" 
-        onWheel={(e) => adjustBank(e.deltaY < 0 ? 60 : -60)}
+        className={`relative group flex flex-col items-center mt-8 p-8 rounded-3xl transition-colors duration-300 ${!isActive ? 'cursor-ns-resize hover:bg-tokyo-surface/20' : ''}`}
+        onMouseDown={handleMouseDown}
       >
         <span className="text-xs font-bold text-tokyo-dim tracking-widest mb-[-1rem]">
-            {isActive ? "REMAINING" : "SET GOAL"}
+            {isActive ? "REMAINING" : "DRAG TO SET"}
         </span>
 
+        {/* Floating Arrows Visuals (Only show when not active) */}
         {!isActive && (
-            <div className="absolute -right-12 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 transition flex flex-col text-tokyo-dim">
-                <ChevronUp size={24} />
-                <ChevronDown size={24} />
+            <div className={`absolute -right-4 top-1/2 -translate-y-1/2 flex flex-col text-tokyo-dim transition-opacity duration-300 ${isDragging ? 'opacity-100 text-tokyo-cyan scale-110' : 'opacity-0 group-hover:opacity-50'}`}>
+                <ChevronUp size={32} />
+                <ChevronDown size={32} />
             </div>
         )}
 
-        <div className={`text-[10rem] lg:text-[12rem] font-bold tabular-nums tracking-tighter leading-none transition-colors duration-500 ${isActive ? 'text-tokyo-text' : 'text-tokyo-dim'}`}>
+        <div className={`text-[10rem] lg:text-[12rem] font-bold tabular-nums tracking-tighter leading-none transition-colors duration-500 ${
+            isActive ? 'text-tokyo-text' : isDragging ? 'text-tokyo-cyan' : 'text-tokyo-dim'
+        }`}>
             {isActive ? formatTime(currentSlice) : formatTime(totalBank)}
         </div>
         
-        {isActive && (
-             <div className="absolute -bottom-6 w-full text-center text-sm font-mono text-tokyo-dim">
-                TOTAL SESSION: {formatTime(totalBank)}
-            </div>
-        )}
+        <div className="absolute -bottom-2 w-full text-center text-sm font-mono text-tokyo-dim">
+            TOTAL SESSION: {formatTime(totalBank)}
+        </div>
       </div>
 
       {/* Control Deck */}
@@ -113,7 +163,6 @@ const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut 
 
         <div className="w-px h-8 bg-tokyo-highlight mx-2"></div>
         
-        {/* UPDATED: Audio Indicator */}
         <div className="flex flex-col gap-1 min-w-[100px]">
              <label className="text-[10px] uppercase text-tokyo-dim font-bold flex items-center gap-1">
                 <Bell size={10} /> Sound

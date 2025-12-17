@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useKeyboard } from './hooks/useKeyboard'
 import { loadTasks, saveTasks } from './services/db'
 import { AnimatePresence } from 'framer-motion'
-import { X, Settings, LayoutGrid, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, Settings, LayoutGrid, Timer, ChevronLeft, ChevronRight, Minus, Square, Copy } from 'lucide-react' 
 import { isSameDay, addWeeks, subWeeks, addMonths, subMonths } from 'date-fns'
 import BootSequence from './components/BootSequence'
 
@@ -22,6 +22,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(new Date()) 
   const [viewDate, setViewDate] = useState(new Date()) // Controls what Month/Week is visible
   const [isBooting, setIsBooting] = useState(true) 
+  const [isMaximized, setIsMaximized] = useState(false)
 
   const [view, setView] = useState('dashboard') 
   const [calendarView, setCalendarView] = useState('month')
@@ -91,6 +92,13 @@ function App() {
       
     }
   }, [items, isLoaded])
+
+  useEffect(() => {
+    // 1. Listen for changes from Main process
+    window.db.onWindowStateChange((state) => {
+      setIsMaximized(state)
+    })
+  }, [])
 
   // --- DATA LOGIC ---
 
@@ -327,7 +335,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen w-screen flex flex-col p-4 overflow-hidden bg-tokyo-base text-tokyo-text font-mono relative">
+    <div className="h-screen w-screen flex flex-col p-4 pt-1 overflow-hidden bg-tokyo-base text-tokyo-text font-mono relative">
       
       {/* NAV BAR */}
       <div className="h-10 flex items-center justify-between mb-2 select-none" style={{WebkitAppRegion: 'drag'}}>
@@ -352,7 +360,23 @@ function App() {
                <Settings size={16} />
             </button>
             
-            {/* 3. NEW CLOSE BUTTON (Replaces Date) */}
+            <button 
+               onClick={() => window.db.minimizeWindow()} 
+               className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded"
+            >
+               <Minus size={16} />
+            </button>
+
+            {/* MAXIMIZE / RESTORE BUTTON */}
+            <button 
+               onClick={() => window.db.maximizeWindow()} 
+               className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded"
+               title={isMaximized ? "Restore" : "Maximize"}
+            >
+               {isMaximized ? <Copy size={16} /> : <Square size={16} />}
+            </button>
+            
+            {/* CLOSE BUTTON */}
             <button 
                onClick={() => window.db.closeApp()} 
                className="text-tokyo-dim hover:text-tokyo-red transition p-1 hover:bg-tokyo-red/10 rounded"
@@ -377,8 +401,8 @@ function App() {
                                 <button onClick={handleNext} className="p-1 hover:text-tokyo-cyan"><ChevronRight size={14} /></button>
                             </div>
 
-                            <button onClick={() => setCalendarView('month')} className={`text-xs px-2 py-1 rounded transition ${calendarView === 'month' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>MONTH</button>
-                            <button onClick={() => setCalendarView('week')} className={`text-xs px-2 py-1 rounded transition ${calendarView === 'week' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>WEEK</button>
+                            <button onClick={() => setCalendarView('month')} className={`text-sm px-2 py-1 rounded transition ${calendarView === 'month' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>MONTH</button>
+                            <button onClick={() => setCalendarView('week')} className={`text-sm px-2 py-1 rounded transition ${calendarView === 'week' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>WEEK</button>
                         </div>
                         <button onClick={openCreateModal} className="text-xs border border-tokyo-green text-tokyo-green px-2 py-1 rounded hover:bg-tokyo-green hover:text-tokyo-base transition font-bold">+ NEW ENTRY</button>
                     </div>

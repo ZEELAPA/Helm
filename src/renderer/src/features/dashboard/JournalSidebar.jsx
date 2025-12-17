@@ -21,7 +21,7 @@ const TaskItem = ({ task, onToggle, onEdit, onOpenScratchpad }) => {
 
     return (
         <div 
-            onDoubleClick={() => onEdit(task)} 
+            onDoubleClick={() => onOpenScratchpad(task)} 
             className="group flex items-center gap-3 hover:bg-tokyo-highlight/10 rounded transition-colors pr-2 cursor-pointer select-none py-1"
         >
             {/* CHECKBOX */}
@@ -94,8 +94,8 @@ const JournalSidebar = ({ tasks, onAddTask, onToggleTask, onEditTask, onOpenScra
         
         {/* HEADER */}
         <div className="p-3 border-b border-tokyo-highlight flex justify-between items-center bg-tokyo-surface/50">
-            <h2 className="text-tokyo-cyan font-bold tracking-widest flex items-center gap-2 text-xs">
-                {viewMode === 'daily' ? 'JOURNAL' : 'MASTER LIST'}
+            <h2 className="text-tokyo-cyan font-bold tracking-widest flex items-center gap-2 text-sm">
+                {viewMode === 'daily' ? 'TODAY' : 'MASTER LIST'}
             </h2>
             
             {/* TOGGLE BUTTON */}

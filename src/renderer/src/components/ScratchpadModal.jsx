@@ -20,7 +20,7 @@ const ScratchpadModal = ({ task, onSave, onClose }) => {
                 <h2 className="text-tokyo-purple font-bold tracking-widest flex items-center gap-2">
                     <FileText size={16} /> SCRATCHPAD
                 </h2>
-                <span className="text-xs text-tokyo-dim font-mono">EDITING: {task.title}</span>
+                <span className="text-xs text-tokyo-dim font-mono">EDITING: <b>{task.title}</b></span>
             </div>
             <button onClick={onClose} className="hover:text-tokyo-red transition"><X size={20} /></button>
         </div>

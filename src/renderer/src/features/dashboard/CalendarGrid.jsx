@@ -1,7 +1,7 @@
 import React from 'react'
 import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay } from 'date-fns'
 
-const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => { // Accepted items prop
+const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
   const monthStart = startOfMonth(viewDate)
   const monthEnd = endOfMonth(viewDate)
   const startDate = startOfWeek(monthStart, { weekStartsOn: 0 }) 
@@ -9,31 +9,27 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate })
 
-  // --- HELPER: Find items for a specific grid day ---
-  const getDotsForDay = (dayDate) => {
-    // Filter items that match this specific day
+  // --- HELPER: Split items into Events and Tasks ---
+  const getItemsForDay = (dayDate) => {
     const dayItems = items.filter(item => {
-        // 1. Check for Weekly Repeats (Events only usually)
+        // 1. Weekly Repeats
         if (item.repeats === 'weekly' && item.dayOfWeek === dayDate.getDay()) return true
-        
-        // 2. Check for Specific Date matches
-        if (item.date) {
-            // Handle string vs Date object issues safely
-            const itemDateObj = new Date(item.date)
-            return isSameDay(itemDateObj, dayDate)
-        }
+        // 2. Specific Date
+        if (item.date) return isSameDay(new Date(item.date), dayDate)
         return false
     })
 
-    // Sort: Events (Green) first, then Tasks (Purple)
-    return dayItems.sort((a, b) => (a.type === 'event' ? -1 : 1))
+    return {
+        events: dayItems.filter(i => i.type === 'event'),
+        tasks: dayItems.filter(i => i.type === 'task').sort((a,b) => Number(a.done) - Number(b.done)) // Pending first
+    }
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden select-none">
       {/* Header */}
       <div className="p-4 flex justify-between items-baseline border-b border-tokyo-surface bg-tokyo-base/50">
-        <h2 className="text-3xl font-bold text-tokyo-blue tracking-tighter uppercase">
+        <h2 className="text-2xl font-bold text-tokyo-blue tracking-wider uppercase font-mono ">
           {format(viewDate, 'MMMM yyyy')}
         </h2>
         <span className="text-tokyo-dim text-sm font-mono">STATUS: ONLINE</span>
@@ -55,48 +51,51 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
             const isCurrentMonth = isSameMonth(dayItem, monthStart)
             const isToday = isSameDay(dayItem, new Date())
 
-            // Get data for this cell
-            const dots = getDotsForDay(dayItem)
+            const { events, tasks } = getItemsForDay(dayItem)
 
             return (
                 <div 
                     key={index}
                     onClick={() => onSelectDate(dayItem)}
                     className={`
-                        relative border-r border-b border-tokyo-surface/50 p-2 cursor-pointer transition-colors duration-100 flex flex-col justify-between
+                        relative border-r border-b border-tokyo-surface/50 p-2 cursor-pointer transition-colors duration-100 flex flex-col gap-1
                         hover:bg-tokyo-highlight/20
                         ${!isCurrentMonth ? 'text-tokyo-dim/30 bg-tokyo-base/30' : 'text-tokyo-text'}
                         ${isSelected ? 'bg-tokyo-highlight/30' : ''}
                     `}
                 >
-                    <div className="flex justify-between items-start">
+                    {/* Date Number */}
+                    <div className="flex justify-between items-start mb-1">
                         <span className={`text-sm font-bold ${isToday ? 'text-tokyo-cyan' : ''}`}>
                             {format(dayItem, 'd')}
                         </span>
-                        
-                        {/* Status Indicator for Today */}
-                        {isToday && (
-                             <div className="w-1.5 h-1.5 rounded-full bg-tokyo-cyan shadow-[0_0_8px_#7dcfff]"></div>
-                        )}
+                        {isToday && <div className="w-1.5 h-1.5 rounded-full bg-tokyo-cyan shadow-[0_0_8px_#7dcfff]"></div>}
                     </div>
 
-                    {/* --- THE SIGNAL DOTS --- */}
-                    <div className="flex gap-1 flex-wrap content-end min-h-[6px]">
-                        {dots.slice(0, 5).map((item, i) => (
+                    {/* ROW 1: EVENTS (Green Dots) */}
+                    <div className="flex gap-1 flex-wrap content-start min-h-[6px]">
+                        {events.slice(0, 8).map((item, i) => (
                             <div 
                                 key={item.id || i} 
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                    item.type === 'event' 
-                                        ? 'bg-tokyo-green shadow-[0_0_5px_rgba(115,218,170,0.5)]' // Green + Glow
-                                        : 'bg-tokyo-purple' // Purple
-                                }`}
-                                title={item.title}
+                                className="w-1.5 h-1.5 rounded-full bg-tokyo-green shadow-[0_0_5px_rgba(115,218,170,0.5)]"
+                                title={`Event: ${item.title}`}
                             />
                         ))}
-                        {/* If more than 5 items, show a small plus */}
-                        {dots.length > 5 && (
-                            <div className="w-1.5 h-1.5 flex items-center justify-center text-[6px] text-tokyo-dim">+</div>
-                        )}
+                    </div>
+
+                    {/* ROW 2: TASKS (Purple Dots) */}
+                    <div className="flex gap-1 flex-wrap content-start min-h-[6px]">
+                        {tasks.slice(0, 8).map((item, i) => (
+                            <div 
+                                key={item.id || i} 
+                                className={`w-1.5 h-1.5 rounded-full box-border ${
+                                    item.done 
+                                    ? 'border border-tokyo-dim opacity-50' // Hollow circle for Done
+                                    : 'bg-tokyo-purple' // Solid for Pending
+                                }`}
+                                title={`Task: ${item.title}`}
+                            />
+                        ))}
                     </div>
                 </div>
             )

@@ -12,7 +12,7 @@ export const useAudio = (customSoundData) => {
         
         const sound = new Howl({
             src: [src],
-            volume: 0.5,
+            volume: 0.25,
             preload: true,
             html5: true
         });

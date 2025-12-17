@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron' // [!code ++]
+import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store' // This will now work with v8.1.0
@@ -69,6 +69,16 @@ function createWindow() {
     if (mainWindow) mainWindow.close() 
   })
   // ----------------------------------
+
+  // --- NEW: Window State Sync (Main -> Renderer) ---
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window:state-change', true)
+  })
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window:state-change', false)
+  })
+  // -------------------------------------------------
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -175,6 +185,22 @@ ipcMain.handle('save-audio-file', async (event, { name, buffer }) => {
   return `file://${filePath}` // Return the path to be saved in DB
 })
 // ---------------------------------------------------------
+
+// --- NEW: Window Controls (Renderer -> Main) ---
+ipcMain.on('window:maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize()
+    } else {
+      mainWindow.maximize()
+    }
+  }
+})
+
+ipcMain.on('window:minimize', () => {
+  if (mainWindow) mainWindow.minimize()
+})
+// -----------------------------------------------
 
 
 app.whenReady().then(() => {

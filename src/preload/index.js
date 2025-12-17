@@ -17,7 +17,14 @@ const api = {
   
   // UI -> Logic
   sendTimerControl: (action) => ipcRenderer.send('timer:control', action),
-  onTimerCommand: (callback) => ipcRenderer.on('timer:command', (_event, value) => callback(value))
+  onTimerCommand: (callback) => ipcRenderer.on('timer:command', (_event, value) => callback(value)),
+
+  // NEW WINDOW CONTROLS
+  maximizeWindow: () => ipcRenderer.send('window:maximize'),
+  minimizeWindow: () => ipcRenderer.send('window:minimize'),
+
+  onWindowStateChange: (callback) => ipcRenderer.on('window:state-change', (_event, isMax) => callback(isMax))
+
 }
 
 if (process.contextIsolated) {

@@ -2,7 +2,7 @@
 module.exports = {
   content: [
     "./src/renderer/index.html",
-    "./src/renderer/src/**/*.{js,ts,jsx,tsx}" // This tells it to scan all your React files
+    "./src/renderer/src/**/*.{js,ts,jsx,tsx}"
   ],
   theme: {
     extend: {

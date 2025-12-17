@@ -13,18 +13,17 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
     endTime: '10:00',
     description: '',
     repeats: 'none',
-    color: 'green'
+    color: 'green',
+    project: ''
   }
 
   const [formData, setFormData] = useState(defaultState)
 
-  // Load initial data if editing
   useEffect(() => {
     if (initialData) {
         setFormData({
             ...defaultState,
             ...initialData,
-            // Ensure date is string format for input
             date: initialData.date ? new Date(initialData.date).toISOString().split('T')[0] : defaultState.date
         })
     }
@@ -34,7 +33,6 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
     if (!formData.title) return
     const dateObj = new Date(formData.date)
     const dayOfWeek = dateObj.getDay()
-    // Pass back the ID if editing, so App knows to update instead of create
     onSave({ ...formData, id: initialData?.id, dayOfWeek })
   }
 
@@ -46,8 +44,20 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
       purple: 'bg-tokyo-purple'
   }
 
+  // --- ESCAPE KEY HANDLER ---
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+        e.stopPropagation() // Prevent bubbling
+        onClose()
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    // Added onKeyDown here to capture events from inputs
+    <div 
+        className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        onKeyDown={handleKeyDown}
+    >
       <div className="w-full max-w-md bg-tokyo-base border border-tokyo-cyan p-1 shadow-2xl">
         
         {/* Header */}
@@ -64,21 +74,21 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
                 <label className="text-tokyo-dim text-[10px] uppercase">Title</label>
                 <input 
                     autoFocus
-                    className="bg-tokyo-surface/50 border border-tokyo-highlight p-2 text-tokyo-text outline-none focus:border-tokyo-cyan"
+                    className="bg-tokyo-surface/50 border border-tokyo-highlight p-2 text-tokyo-text outline-none focus:border-tokyo-cyan placeholder-tokyo-dim/30"
                     value={formData.title}
                     onChange={e => setFormData({...formData, title: e.target.value})}
+                    placeholder="Enter title..."
                 />
             </div>
 
-            {/* NEW: PROJECT INPUT */}
             <div className="flex flex-col gap-1">
                 <label className="text-tokyo-dim text-[10px] uppercase">Project / Category</label>
                 <input 
                     type="text" 
-                    className="bg-tokyo-base border border-tokyo-highlight p-2 text-sm text-tokyo-cyan font-bold rounded outline-none focus:border-tokyo-cyan"
+                    className="bg-tokyo-base border border-tokyo-highlight p-2 text-sm text-tokyo-cyan font-bold rounded outline-none focus:border-tokyo-cyan placeholder-tokyo-dim/30"
                     value={formData.project || ''} 
                     onChange={(e) => setFormData({...formData, project: e.target.value})}
-                    placeholder="e.g., WORK, PERSONAL, API"
+                    placeholder="e.g., WORK, PERSONAL"
                 />
             </div>  
 
@@ -101,6 +111,7 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
                             if (initialData && onOpenScratchpad) {
                                 onOpenScratchpad(initialData)
                             } else {
+                                // Optional: You could allow opening scratchpad for new items if you save them first automatically
                                 alert("Please save the task first to add notes.")
                             }
                         }}
@@ -130,11 +141,9 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
                 </div>
             </div>
 
-            {/* Time Inputs Row */}
             <div className="flex gap-4">
                 <div className="flex-1 flex flex-col gap-1">
                     <label className="text-tokyo-dim text-[10px] uppercase">Start Time</label>
-                    {/* OLD: <input type="time" ... /> */}
                     <CustomTimePicker 
                         value={formData.startTime}
                         onChange={(val) => setFormData({...formData, startTime: val})}
@@ -160,7 +169,6 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
             </div>
 
             <div className="pt-4 flex justify-between gap-2 border-t border-tokyo-highlight mt-2">
-                {/* Delete Button (Only if editing) */}
                 {initialData ? (
                     <button onClick={() => onDelete(initialData.id)} className="px-4 py-2 text-tokyo-red hover:bg-tokyo-red/10 border border-tokyo-red/50 rounded flex items-center gap-2">
                         <Trash2 size={14} /> DELETE
@@ -168,7 +176,7 @@ const EventModal = ({ selectedDate, initialData, onSave, onClose, onDelete, onOp
                 ) : <div></div>}
 
                 <div className="flex gap-2">
-                    <button onClick={onClose} className="px-4 py-2 text-tokyo-dim hover:text-tokyo-text">[ CANCEL ]</button>
+                    <button onClick={onClose} className="px-4 py-2 text-tokyo-dim hover:text-tokyo-text text-xs">[ ESC to Cancel ]</button>
                     <button onClick={handleSubmit} className="px-4 py-2 bg-tokyo-cyan text-tokyo-base font-bold hover:brightness-110 flex items-center gap-2">
                         <Save size={14} /> SAVE
                     </button>
