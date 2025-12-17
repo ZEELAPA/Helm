@@ -41,5 +41,30 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.0"
+  },
+  "build": {
+    "appId": "com.helm.app",
+    "productName": "Helm",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "icon": "resources/helm.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Helm"
+    }
   }
 }
