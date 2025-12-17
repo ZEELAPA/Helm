@@ -2,7 +2,7 @@ import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'ele
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store' // This will now work with v8.1.0
-import iconPath from '../../resources/icon.png?asset'
+import iconPath from '../../resources/helm.ico?asset'
 
 // Initialize the store
 const store = new Store()
