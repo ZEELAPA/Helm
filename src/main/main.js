@@ -1,24 +1,23 @@
-import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import Store from 'electron-store' // This will now work with v8.1.0
+import Store from 'electron-store' 
 import iconPath from '../../resources/helm.ico?asset'
 
-// Initialize the store
 const store = new Store()
-let mainWindow = null // [!code ++]
-let tray = null // [!code ++]
+let mainWindow = null
+let tray = null
 let miniWindow = null
+let notificationInterval = null
 
-// 1. ADD THIS FUNCTION
 function createMiniWindow() {
   miniWindow = new BrowserWindow({
     width: 300,
-    height: 120, // Small HUD size
+    height: 120,
     show: false,
-    frame: false, // Frameless
-    alwaysOnTop: true, // Key feature: Floats over other apps
-    skipTaskbar: true, // Don't clutter taskbar
+    frame: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
     resizable: false,
     backgroundColor: '#1a1b26',
     webPreferences: {
@@ -27,7 +26,6 @@ function createMiniWindow() {
     }
   })
 
-  // Load the same index.html but with a hash to tell React to render the MiniApp
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     miniWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/mini`)
   } else {
@@ -40,11 +38,11 @@ function createWindow() {
     width: 1200,
     height: 800,
     show: false,
-    frame: false, // [cite: 12]
+    frame: false,
     autoHideMenuBar: true,
-    backgroundColor: '#1a1b26', // [cite: 13]
-    icon: iconPath, // <--- ADD THIS LINE
-    ...(process.platform === 'linux' ? { icon } : {}),
+    backgroundColor: '#1a1b26',
+    icon: iconPath,
+    ...(process.platform === 'linux' ? { icon: iconPath } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -55,10 +53,8 @@ function createWindow() {
     mainWindow.show()
   })
 
-  // --- NEW: Intercept Close Event ---
   mainWindow.on('close', (event) => {
-  // If the app is not quitting (user just clicked X), hide it instead
-  if (!app.isQuitting) {
+    if (!app.isQuitting) {
       event.preventDefault()
       mainWindow.hide()
     }
@@ -68,17 +64,9 @@ function createWindow() {
   ipcMain.on('window:close', () => {
     if (mainWindow) mainWindow.close() 
   })
-  // ----------------------------------
 
-  // --- NEW: Window State Sync (Main -> Renderer) ---
-  mainWindow.on('maximize', () => {
-    mainWindow.webContents.send('window:state-change', true)
-  })
-
-  mainWindow.on('unmaximize', () => {
-    mainWindow.webContents.send('window:state-change', false)
-  })
-  // -------------------------------------------------
+  mainWindow.on('maximize', () => mainWindow.webContents.send('window:state-change', true))
+  mainWindow.on('unmaximize', () => mainWindow.webContents.send('window:state-change', false))
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -94,78 +82,103 @@ function createWindow() {
   createMiniWindow()
 }
 
-// 2. ADD IPC HANDLERS FOR POPUP MODE
-// A. Switch to Mini Mode
+// --- NOTIFICATION SYSTEM LOGIC ---
+function startNotificationChecker() {
+  // Check every 60 seconds
+  notificationInterval = setInterval(() => {
+    const tasks = store.get('tasks', [])
+    const now = new Date()
+    let hasChanges = false
+
+    const updatedTasks = tasks.map(task => {
+      // If task has a notification time set, hasn't been notified yet, and isn't done
+      if (task.notifyAt && !task.hasBeenNotified && !task.done) {
+        const notifyTime = new Date(task.notifyAt)
+
+        // Check if NOW is past the notification time
+        if (now >= notifyTime) {
+          
+          // Send Notification
+          const notif = new Notification({
+            title: 'Helm Reminder',
+            body: `Upcoming: ${task.title}`,
+            silent: false,
+            icon: iconPath
+          })
+          
+          notif.show()
+          
+          notif.on('click', () => {
+            if (mainWindow) {
+                if (mainWindow.isMinimized()) mainWindow.restore()
+                mainWindow.show()
+                mainWindow.focus()
+            }
+          })
+
+          // Mark as notified so we don't spam
+          hasChanges = true
+          return { ...task, hasBeenNotified: true }
+        }
+      }
+      return task
+    })
+
+    // Only write to disk if we actually sent a notification
+    if (hasChanges) {
+      store.set('tasks', updatedTasks)
+      // Optional: Inform renderer to refresh UI if open
+      if(mainWindow) mainWindow.webContents.send('data:updated') 
+    }
+
+  }, 60000) // 60000 ms = 1 minute
+}
+// ---------------------------------
+
 ipcMain.on('mode:mini', () => {
   mainWindow.hide()
   miniWindow.show()
 })
 
-// B. Switch back to Main Mode
 ipcMain.on('mode:main', () => {
   miniWindow.hide()
   mainWindow.show()
 })
 
-// C. Sync Data: Main -> Mini (The "Tick")
 ipcMain.on('timer:sync', (_event, data) => {
   if (miniWindow && !miniWindow.isDestroyed() && miniWindow.isVisible()) {
     miniWindow.webContents.send('timer:update', data)
   }
 })
 
-// D. Send Commands: Mini -> Main (Play/Pause/Stop)
 ipcMain.on('timer:control', (_event, action) => {
   if (mainWindow) {
     mainWindow.webContents.send('timer:command', action)
   }
 })
 
-// --- NEW: Tray Logic ---
 function createTray() {
-  // Use the imported path
   const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16 })
-  
   tray = new Tray(trayIcon)
-  
   const contextMenu = Menu.buildFromTemplate([
     { label: 'Show Helm', click: () => mainWindow && mainWindow.show() },
     { type: 'separator' },
-    { label: 'Quit', click: () => {
-        app.isQuitting = true
-        app.quit() 
-      } 
-    }
+    { label: 'Quit', click: () => { app.isQuitting = true; app.quit() } }
   ])
-
   tray.setToolTip('Helm')
   tray.setContextMenu(contextMenu)
-
   tray.on('click', () => {
-    if (!mainWindow) return; // Safety check
-
-    if (mainWindow.isVisible()) {
-        mainWindow.hide()
-    } else {
-        mainWindow.show()
-    }
+    if (!mainWindow) return; 
+    mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
   })
 }
-// -----------------------
 
-// --- DATABASE HANDLERS (The new part) ---
-// 1. Get Data
-ipcMain.handle('db:get', (_event, key) => {
-  return store.get(key, []) // Returns empty array [] if key doesn't exist
-})
-
-// 2. Set Data
+ipcMain.handle('db:get', (_event, key) => store.get(key, []))
 ipcMain.handle('db:set', (_event, key, value) => {
   store.set(key, value)
   return true
 })
 
-// --- NEW: Window Focus Handler (for Notification click) ---
 ipcMain.on('window:focus', () => {
     if (mainWindow) {
         if (mainWindow.isMinimized()) mainWindow.restore()
@@ -174,44 +187,25 @@ ipcMain.on('window:focus', () => {
     }
 })
 
-ipcMain.handle('save-audio-file', async (event, { name, buffer }) => {
-  const userDataPath = app.getPath('userData')
-  const soundsDir = path.join(userDataPath, 'sounds')
-  
-  if (!fs.existsSync(soundsDir)) fs.mkdirSync(soundsDir)
-  
-  const filePath = path.join(soundsDir, name)
-  fs.writeFileSync(filePath, Buffer.from(buffer))
-  return `file://${filePath}` // Return the path to be saved in DB
-})
-// ---------------------------------------------------------
-
-// --- NEW: Window Controls (Renderer -> Main) ---
 ipcMain.on('window:maximize', () => {
   if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow.maximize()
-    }
+    mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
   }
 })
 
 ipcMain.on('window:minimize', () => {
   if (mainWindow) mainWindow.minimize()
 })
-// -----------------------------------------------
-
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.Helm.app')
-
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
-
+  
   createWindow()
-  createTray() // [!code ++]
+  createTray()
+  startNotificationChecker() // <--- Start the loop
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -220,5 +214,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    // We do NOT quit here, so the notification loop keeps running in background
+    // app.quit() 
   }
 })

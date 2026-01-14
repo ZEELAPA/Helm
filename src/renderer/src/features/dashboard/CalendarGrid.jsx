@@ -1,5 +1,5 @@
 import React from 'react'
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay } from 'date-fns'
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, isWithinInterval, startOfDay } from 'date-fns'
 
 const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
   const monthStart = startOfMonth(viewDate)
@@ -9,11 +9,26 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate })
 
-  // --- HELPER: Split items into Events and Tasks ---
   const getItemsForDay = (dayDate) => {
     const dayItems = items.filter(item => {
-        // 1. Weekly Repeats
-        if (item.repeats === 'weekly' && item.dayOfWeek === dayDate.getDay()) return true
+        const checkDate = startOfDay(dayDate)
+
+        // 1. Weekly Repeats with optional Range check
+        if (item.repeats === 'weekly') {
+            const isCorrectDay = item.dayOfWeek === dayDate.getDay();
+            
+            // Check Start Range
+            if (item.repeatStart) {
+                if (checkDate < startOfDay(new Date(item.repeatStart))) return false;
+            }
+            // Check End Range
+            if (item.repeatEnd) {
+                if (checkDate > startOfDay(new Date(item.repeatEnd))) return false;
+            }
+            
+            return isCorrectDay;
+        }
+
         // 2. Specific Date
         if (item.date) return isSameDay(new Date(item.date), dayDate)
         return false
@@ -21,13 +36,14 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
 
     return {
         events: dayItems.filter(i => i.type === 'event'),
-        tasks: dayItems.filter(i => i.type === 'task').sort((a,b) => Number(a.done) - Number(b.done)) // Pending first
+        tasks: dayItems.filter(i => i.type === 'task').sort((a,b) => Number(a.done) - Number(b.done)) 
     }
   }
 
+  // ... (Rest of the render return is largely the same, just keeping the map loop) ...
   return (
     <div className="flex flex-col h-full overflow-hidden select-none">
-      {/* Header */}
+       {/* ... Header and Weekday Row code ... */}
       <div className="p-4 flex justify-between items-baseline border-b border-tokyo-surface bg-tokyo-base/50">
         <h2 className="text-2xl font-bold text-tokyo-blue tracking-wider uppercase font-mono ">
           {format(viewDate, 'MMMM yyyy')}
@@ -35,7 +51,6 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
         <span className="text-tokyo-dim text-sm font-mono">STATUS: ONLINE</span>
       </div>
 
-      {/* Weekday Headers */}
       <div className="grid grid-cols-7 border-b border-tokyo-highlight bg-tokyo-base/50">
         {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
           <div key={day} className="py-2 text-center text-xs font-bold text-tokyo-dim tracking-widest">
@@ -44,13 +59,11 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
         ))}
       </div>
 
-      {/* The Grid */}
       <div className="grid grid-cols-7 grid-rows-6 flex-1">
         {calendarDays.map((dayItem, index) => {
             const isSelected = isSameDay(dayItem, selectedDate)
             const isCurrentMonth = isSameMonth(dayItem, monthStart)
             const isToday = isSameDay(dayItem, new Date())
-
             const { events, tasks } = getItemsForDay(dayItem)
 
             return (
@@ -64,7 +77,6 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
                         ${isSelected ? 'bg-tokyo-highlight/30' : ''}
                     `}
                 >
-                    {/* Date Number */}
                     <div className="flex justify-between items-start mb-1">
                         <span className={`text-sm font-bold ${isToday ? 'text-tokyo-cyan' : ''}`}>
                             {format(dayItem, 'd')}
@@ -72,27 +84,21 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
                         {isToday && <div className="w-1.5 h-1.5 rounded-full bg-tokyo-cyan shadow-[0_0_8px_#7dcfff]"></div>}
                     </div>
 
-                    {/* ROW 1: EVENTS (Green Dots) */}
                     <div className="flex gap-1 flex-wrap content-start min-h-[6px]">
                         {events.slice(0, 8).map((item, i) => (
                             <div 
                                 key={item.id || i} 
-                                className="w-1.5 h-1.5 rounded-full bg-tokyo-green shadow-[0_0_5px_rgba(115,218,170,0.5)]"
+                                className={`w-1.5 h-1.5 rounded-full bg-tokyo-${item.color || 'green'} shadow-sm`}
                                 title={`Event: ${item.title}`}
                             />
                         ))}
                     </div>
 
-                    {/* ROW 2: TASKS (Purple Dots) */}
                     <div className="flex gap-1 flex-wrap content-start min-h-[6px]">
                         {tasks.slice(0, 8).map((item, i) => (
                             <div 
                                 key={item.id || i} 
-                                className={`w-1.5 h-1.5 rounded-full box-border ${
-                                    item.done 
-                                    ? 'border border-tokyo-dim opacity-50' // Hollow circle for Done
-                                    : 'bg-tokyo-purple' // Solid for Pending
-                                }`}
+                                className={`w-1.5 h-1.5 rounded-full box-border ${item.done ? 'border border-tokyo-dim opacity-50' : `bg-tokyo-${item.color || 'purple'}`}`}
                                 title={`Task: ${item.title}`}
                             />
                         ))}

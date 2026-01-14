@@ -1,45 +1,81 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, addMonths, subMonths, isSameMonth } from 'date-fns'
 import { Calendar as CalIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+
+// --- HELPER: Portal Logic ---
+const PortalPopup = ({ children, onClose }) => {
+    // Close on scroll or resize to prevent floating UI drifting
+    useEffect(() => {
+        const handleEvent = () => onClose()
+        window.addEventListener('scroll', handleEvent, true)
+        window.addEventListener('resize', handleEvent)
+        return () => {
+            window.removeEventListener('scroll', handleEvent, true)
+            window.removeEventListener('resize', handleEvent)
+        }
+    }, [])
+
+    return createPortal(
+        <>
+            <div className="fixed inset-0 z-[9998]" onClick={onClose}></div>
+            <div className="fixed z-[9999]" style={{ isolation: 'isolate' }}>
+                {children}
+            </div>
+        </>,
+        document.body
+    )
+}
 
 // --- 1. THE DATE PICKER ---
 export const CustomDatePicker = ({ value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date()) // For navigation
+  const [viewDate, setViewDate] = useState(value ? new Date(value) : new Date())
+  const [coords, setCoords] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef(null)
 
   const selectedDate = value ? new Date(value) : new Date()
 
-  // Generate Mini Grid
+  // Grid Generation
   const monthStart = startOfMonth(viewDate)
   const monthEnd = endOfMonth(viewDate)
   const startDate = startOfWeek(monthStart, { weekStartsOn: 0 })
   const endDate = endOfWeek(monthEnd, { weekStartsOn: 0 })
   const days = eachDayOfInterval({ start: startDate, end: endDate })
 
+  const toggleOpen = () => {
+      if (!isOpen && triggerRef.current) {
+          const rect = triggerRef.current.getBoundingClientRect()
+          // Calculate position so it floats exactly below the input
+          setCoords({ top: rect.bottom + 5, left: rect.left })
+      }
+      setIsOpen(!isOpen)
+  }
+
   const handleSelect = (day) => {
-    // Return formatted string "YYYY-MM-DD" to match native input behavior
     onChange(format(day, 'yyyy-MM-dd'))
     setIsOpen(false)
   }
 
   return (
-    <div className="relative w-full font-mono">
+    <>
       {/* The Input Trigger */}
       <div 
-        onClick={() => setIsOpen(!isOpen)}
+        ref={triggerRef}
+        onClick={toggleOpen}
         className={`flex items-center gap-2 bg-tokyo-base border p-2 cursor-pointer transition select-none ${isOpen ? 'border-tokyo-cyan' : 'border-tokyo-highlight hover:border-tokyo-cyan/50'}`}
       >
         <CalIcon size={14} className="text-tokyo-dim" />
         <span className="text-sm text-tokyo-text">{format(selectedDate, 'MMM dd, yyyy')}</span>
       </div>
 
-      {/* The Popup */}
+      {/* The Portal Popup */}
       {isOpen && (
-        <>
-          {/* Backdrop to close */}
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-          
-          <div className="absolute top-full left-0 mt-1 w-64 bg-tokyo-base border border-tokyo-cyan shadow-xl z-50 p-2">
+        <PortalPopup onClose={() => setIsOpen(false)}>
+          <div 
+            className="w-64 bg-tokyo-base border border-tokyo-cyan shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-100"
+            style={{ position: 'fixed', top: coords.top, left: coords.left }}
+          >
             
             {/* Nav Header */}
             <div className="flex justify-between items-center mb-2 px-1">
@@ -73,30 +109,38 @@ export const CustomDatePicker = ({ value, onChange }) => {
                 })}
             </div>
           </div>
-        </>
+        </PortalPopup>
       )}
-    </div>
+    </>
   )
 }
 
 // --- 2. THE TIME PICKER ---
 export const CustomTimePicker = ({ value, onChange }) => {
     const [isOpen, setIsOpen] = useState(false)
+    const [coords, setCoords] = useState({ top: 0, left: 0 })
+    const triggerRef = useRef(null)
     
-    // Parse "HH:MM"
     const [hours, minutes] = value ? value.split(':') : ['09', '00']
-    
     const hourOptions = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'))
-    // 5-minute intervals for cleaner UI, or use length 60 for full precision
     const minuteOptions = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0')) 
+
+    const toggleOpen = () => {
+        if (!isOpen && triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect()
+            setCoords({ top: rect.bottom + 5, left: rect.left })
+        }
+        setIsOpen(!isOpen)
+    }
 
     const handleHourChange = (h) => onChange(`${h}:${minutes}`)
     const handleMinuteChange = (m) => onChange(`${hours}:${m}`)
 
     return (
-        <div className="relative w-full font-mono">
+        <>
             <div 
-                onClick={() => setIsOpen(!isOpen)}
+                ref={triggerRef}
+                onClick={toggleOpen}
                 className={`flex items-center gap-2 bg-tokyo-base border p-2 cursor-pointer transition select-none ${isOpen ? 'border-tokyo-cyan' : 'border-tokyo-highlight hover:border-tokyo-cyan/50'}`}
             >
                 <Clock size={14} className="text-tokyo-dim" />
@@ -104,10 +148,11 @@ export const CustomTimePicker = ({ value, onChange }) => {
             </div>
 
             {isOpen && (
-                <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-                    <div className="absolute top-full left-0 mt-1 w-48 bg-tokyo-base border border-tokyo-cyan shadow-xl z-50 flex h-48">
-                        
+                <PortalPopup onClose={() => setIsOpen(false)}>
+                    <div 
+                        className="w-48 bg-tokyo-base border border-tokyo-cyan shadow-2xl flex h-48 animate-in fade-in zoom-in-95 duration-100"
+                        style={{ position: 'fixed', top: coords.top, left: coords.left }}
+                    >
                         {/* Hours Column */}
                         <div className="flex-1 overflow-y-auto custom-scrollbar border-r border-tokyo-surface p-1">
                             <div className="text-[10px] text-center text-tokyo-dim mb-1">HR</div>
@@ -136,8 +181,8 @@ export const CustomTimePicker = ({ value, onChange }) => {
                             ))}
                         </div>
                     </div>
-                </>
+                </PortalPopup>
             )}
-        </div>
+        </>
     )
 }

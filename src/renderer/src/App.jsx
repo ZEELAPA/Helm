@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { useKeyboard } from './hooks/useKeyboard'
 import { loadTasks, saveTasks } from './services/db'
-import { AnimatePresence } from 'framer-motion'
-import { X, Settings, LayoutGrid, Timer, ChevronLeft, ChevronRight, Minus, Square, Copy } from 'lucide-react' 
-import { isSameDay, addWeeks, subWeeks, addMonths, subMonths } from 'date-fns'
+import { X, Settings, LayoutGrid, Timer, ChevronLeft, ChevronRight, Minus, Square, Copy, Sidebar } from 'lucide-react' 
+import { isSameDay, addWeeks, subWeeks, addMonths, subMonths, format } from 'date-fns'
 import BootSequence from './components/BootSequence'
 
 import CalendarGrid from './features/dashboard/CalendarGrid'
@@ -15,66 +14,75 @@ import EventModal from './components/EventModal'
 import { useFocusLogic } from './hooks/useFocusLogic'
 import { useAudio } from './hooks/useAudio'
 import ScratchpadModal from './components/ScratchpadModal'
-import { PictureInPicture } from 'lucide-react'
 
+// --- HELPER: Convert Hex to RGB numbers for Tailwind Variables ---
+const hexToRgb = (hex) => {
+  if (!hex) return '26 27 38'; // Default fallback
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result 
+    ? `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}` 
+    : '26 27 38';
+}
+// ---------------------------------------------------------------
 
 function App() {
   const [selectedDate, setSelectedDate] = useState(new Date()) 
-  const [viewDate, setViewDate] = useState(new Date()) // Controls what Month/Week is visible
+  const [viewDate, setViewDate] = useState(new Date()) 
   const [isBooting, setIsBooting] = useState(true) 
   const [isMaximized, setIsMaximized] = useState(false)
 
   const [view, setView] = useState('dashboard') 
   const [calendarView, setCalendarView] = useState('month')
   
+  const [showJournal, setShowJournal] = useState(true)
+
   const [showSettings, setShowSettings] = useState(false)
   const [showEventModal, setShowEventModal] = useState(false)
   const [scratchpadTask, setScratchpadTask] = useState(null)
-  const [taskViewMode, setTaskViewMode] = useState('daily') // 'daily' or 'all'
+  const [taskViewMode, setTaskViewMode] = useState('daily') 
 
-  
-  // EDIT STATE: If null, we are creating. If object, we are editing.
   const [editingItem, setEditingItem] = useState(null)
 
-    const [settings, setSettings] = useState({ 
+  const [settings, setSettings] = useState({ 
     focusDuration: 25, 
     breakDuration: 5,
-    customSound: null // <--- ADD THIS
-    })
-  
-  const handleSaveDescription = (id, newDescription) => {
-      setItems(prev => prev.map(t => t.id === id ? { ...t, description: newDescription } : t))
-      setScratchpadTask(null)
-  }
-
+    customSound: null,
+    enableNotifications: true,
+    backgroundImage: null, 
+    backgroundColor: '#1a1b26' 
+  })
 
   // DATA
-  const [items, setItems] = useState([
-    { id: 1, type: 'task', title: "Welcome to Helm", date: new Date(), startTime: '09:00', endTime: '10:00', done: false, color: 'purple', description: 'Start here' },
-    { id: 2, type: 'event', title: "Database Systems", dayOfWeek: 1, startTime: '09:00', endTime: '12:00', color: 'green', repeats: 'weekly' }
-  ])
-
+  const [items, setItems] = useState([])
+  const [notebooks, setNotebooks] = useState([])
   const [isLoaded, setIsLoaded] = useState(false) 
   
   useEffect(() => {
     const initData = async () => {
       console.log("System: Booting...")
       try {
+        // 1. Load Tasks
         const savedItems = await loadTasks()
         if (savedItems && savedItems.length > 0) {
             const hydratedItems = savedItems.map(item => ({
                 ...item,
                 date: new Date(item.date)
             }))
-
           setItems(hydratedItems)
-          console.log(`System: Loaded ${savedItems.length} entries.`)
         } else {
-          console.log("System: Database empty. Initializing defaults.")
-          setItems([
-            { id: 1, type: 'task', title: "Welcome to Helm", date: new Date(), startTime: '09:00', endTime: '10:00', done: false, color: 'purple', description: 'Start here' }
-          ])
+          // Default task if empty
+          setItems([{ id: 1, type: 'task', title: "Welcome to Helm", date: new Date(), startTime: '09:00', endTime: '10:00', done: false, color: 'purple', description: 'Start here' }])
         }
+
+        // 2. NEW: Load Settings from Database
+        const savedSettings = await window.db.getItems('settings')
+        if (savedSettings && Object.keys(savedSettings).length > 0) {
+            setSettings(savedSettings) // Restore theme/audio settings
+        }
+
+        const savedNotebooks = await window.db.getItems('notebooks')
+        if (savedNotebooks) setNotebooks(savedNotebooks)
+
       } catch (e) {
         console.error("System Error: DB Load failed", e)
       } finally {
@@ -84,59 +92,54 @@ function App() {
     initData()
   }, [])
 
-  // 4. SAVE ONLY WHEN LOADED
   useEffect(() => {
-    if (isLoaded) {
-      saveTasks(items)
-      console.log("System: Data Synced.")
-      
-    }
+    if (isLoaded) saveTasks(items)
   }, [items, isLoaded])
 
+  useEffect(() => { 
+      if (isLoaded) window.db.setItems('notebooks', notebooks) 
+  }, [notebooks, isLoaded])
+
   useEffect(() => {
-    // 1. Listen for changes from Main process
-    window.db.onWindowStateChange((state) => {
-      setIsMaximized(state)
-    })
+    window.db.onWindowStateChange((state) => setIsMaximized(state))
   }, [])
 
-  // --- DATA LOGIC ---
+  // --- THEME ENGINE: Apply Variables ---
+  const appStyle = settings.backgroundImage 
+    ? { backgroundImage: `linear-gradient(rgba(26, 27, 38, 0.85), rgba(26, 27, 38, 0.95)), url(${settings.backgroundImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } 
+    : { backgroundColor: settings.backgroundColor }
 
+  useEffect(() => {
+    if(!settings.backgroundImage) {
+        // Convert HEX to RGB for Tailwind opacity support
+        const rgbValue = hexToRgb(settings.backgroundColor);
+        document.documentElement.style.setProperty('--bg-base', rgbValue);
+        
+        // Optional: Make surface slightly lighter than base automatically
+        // You could add logic here to calculate lighter shades if needed
+    }
+  }, [settings.backgroundColor, settings.backgroundImage])
+  // -------------------------------------
+
+  // --- DATA LOGIC ---
   const visibleTasks = items
     .filter(item => {
-        if (item.type !== 'task') return false; // Only show tasks in journal
-
-        if (taskViewMode === 'all') {
-            return true
-        } 
-        
-        // Default 'daily' mode logic:
-        // Matches selected date OR is a pending task from the past (overdue)
+        if (item.type !== 'task') return false; 
+        if (taskViewMode === 'all') return true
         const itemDate = new Date(item.date).toDateString()
         const selectedDateStr = selectedDate.toDateString()
-        const isToday = itemDate === selectedDateStr
-        
-        // Optional: Show overdue tasks in daily view too?
-        return isToday
+        return itemDate === selectedDateStr
     })
-    .sort((a, b) => {
-        // Sort by date then time
-        return new Date(a.date) - new Date(b.date) || a.startTime.localeCompare(b.startTime)
-    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date) || a.startTime.localeCompare(b.startTime))
 
-
-  // SAVE (Create or Update)
   const handleSaveItem = (itemData) => {
     if (itemData.id) {
-        // UPDATE existing
         setItems(items.map(i => i.id === itemData.id ? itemData : i))
     } else {
-        // CREATE new
         setItems([...items, { ...itemData, id: Date.now() }])
     }
-    
     setShowEventModal(false)
-    setEditingItem(null) // Reset edit state
+    setEditingItem(null)
   }
 
   const handleDeleteItem = (id) => {
@@ -144,13 +147,11 @@ function App() {
       setShowEventModal(false)
   }
 
-  // TRIGGER EDIT
   const openEditModal = (item) => {
       setEditingItem(item)
       setShowEventModal(true)
   }
 
-  // TRIGGER CREATE
   const openCreateModal = () => {
       setEditingItem(null)
       setShowEventModal(true)
@@ -159,31 +160,27 @@ function App() {
   const handleToggleTask = (id) => setItems(items.map(t => t.id === id ? { ...t, done: !t.done } : t))
   
   const handleAddTask = (text) => {
-    // 1. Simple Parser: Check for +project syntax
-    // Example: "Buy Milk +personal" -> Title: "Buy Milk", Project: "personal"
     let title = text;
     let project = "";
-
     if (text.includes('+')) {
         const parts = text.split('+');
         title = parts[0].trim();
-        project = parts[1].trim().toUpperCase(); // Auto-uppercase project
+        project = parts[1].trim().toUpperCase(); 
     }
-
     const newItem = {
         id: Date.now(),
         type: 'task',
         title: title,
-        project: project, // <--- Add this
+        project: project,
         date: selectedDate,
-        startTime: '12:00', // Default
+        startTime: '12:00',
         done: false,
         color: 'purple'
     }
     setItems([...items, newItem])
   }
 
-  // --- NAVIGATION LOGIC ---
+  // --- NAVIGATION ---
   const handlePrev = () => {
       if(calendarView === 'month') setViewDate(subMonths(viewDate, 1))
       else setViewDate(subWeeks(viewDate, 1))
@@ -194,92 +191,58 @@ function App() {
       else setViewDate(addWeeks(viewDate, 1))
   }
 
+  // --- AUDIO & FOCUS ---
   const { playSound } = useAudio(settings.customSound) 
-  
 
   const handleTimerFinish = () => {
-    // 1. Play Audio
     playSound()
-
-    // 2. Send Native Notification
-    const notif = new Notification('Helm', {
-        body: 'Session Complete',
-        silent: true, // We play our own sound
-    })
-
-    // 3. Focus the window if clicked
-    notif.onclick = () => {      
-      if (window.electron && window.electron.ipcRenderer) {
-        window.electron.ipcRenderer.send('window:focus')
-      }
+    if (settings.enableNotifications) {
+        const notif = new Notification('Helm', { body: 'Session Complete', silent: true })
+        notif.onclick = () => window.electron?.ipcRenderer?.send('window:focus')
     }
   }
 
-  const focusLogic = useFocusLogic(
-      settings.focusDuration, 
-      settings.breakDuration,
-      handleTimerFinish // <--- Pass the new handler here
-  )
-
+  const focusLogic = useFocusLogic(settings.focusDuration, settings.breakDuration, handleTimerFinish)
   const formatTime = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`
 
   useEffect(() => {
-    const formattedTime = formatTime(focusLogic.currentSlice)
-    
     window.db.sendTimerSync({
-      time: formattedTime,
+      time: formatTime(focusLogic.currentSlice),
       isActive: focusLogic.isActive,
       mode: focusLogic.mode
     })
   }, [focusLogic.currentSlice, focusLogic.isActive, focusLogic.mode])
 
-  // 2. LISTEN FOR COMMANDS FROM MINI WINDOW
+  // Mini Window Listener
   useEffect(() => {
-    // Remove listener on cleanup to prevent duplicates
     const removeListener = window.db.onTimerCommand((action) => {
         if (action === 'toggle') focusLogic.toggleTimer()
         if (action === 'stop') focusLogic.resetSession()
     })
-    return () => {
-        // Since onTimerCommand returns the IPC remover in some setups, or we just rely on React cleanup
-        // Note: Electron's IPC listeners can stack. Ideally, ensure this runs once.
-        // For simple apps, this React Effect cleanup is usually sufficient if wired correctly in preload.
-    }
-  }, [focusLogic]) // dependency on focusLogic to get latest functions
+    return () => {} // Clean up handled by electron bridge mostly
+  }, [focusLogic]) 
 
-  // --- KEYBOARD SHORTCUTS ---
+  // --- KEYBOARD ---
   useKeyboard({
-      // View Switching
       'REQ_CTRL+1': () => setView('dashboard'),
       'REQ_CTRL+2': () => setView('focus'),
-      
-      // Actions
       'REQ_CTRL+n': () => openCreateModal(),
-      'REQ_CTRL+,': () => setShowSettings(true), // Ctrl + comma for settings
-      
-      // Vim Bindings
+      'REQ_CTRL+,': () => setShowSettings(true),
       'a': () => {
-          // Find the command input and focus it
-          // We need a tiny DOM hack or a Ref here. 
-          // Since CommandBar is deep, DOM ID is easiest for now.
           const cmdInput = document.getElementById('cmd-input')
           if (cmdInput) cmdInput.focus()
       },
-      
       'Escape': () => {
           setShowEventModal(false)
           setShowSettings(false)
       }
   })
-  // --------------------------
 
-  if (isBooting) {
-    return <BootSequence onComplete={() => setIsBooting(false)} />
-  }
+  // --- RENDER BOOT ---
+  if (isBooting) return <BootSequence onComplete={() => setIsBooting(false)} />
 
-  // --- COMMAND LINE INTERFACE ---
+  // --- COMMAND PARSER ---
   const handleCommandInput = (input) => {
-    // 1. Check if it's a command
     if (input.startsWith('/')) {
         const [cmd, ...args] = input.slice(1).split(' ')
         const arg1 = args[0]
@@ -287,35 +250,23 @@ function App() {
         switch (cmd.toLowerCase()) {
             case 'timer':
                 if (arg1 && !isNaN(arg1)) {
-                    focusLogic.startCustomSession(parseInt(arg1)) // Call the new hook method
+                    focusLogic.startCustomSession(parseInt(arg1))
                     setView('focus')
                 } else {
                     setView('focus')
                 }
                 break;
             case 'focus':
-                // /timer 30 -> Starts 30 min session
-                if (arg1 && !isNaN(arg1)) {
-                    // Update settings temporarily or start directly? 
-                    // Let's switch view and start.
-                    setView('focus')
-                    // Note: You might need to expose a method from useFocusLogic to setTime manually
-                    // For now, let's just switch tabs.
-                } else {
-                    setView('focus')
-                }
+                if (arg1 && !isNaN(arg1)) { setView('focus') } 
+                else { setView('focus') }
                 break;
-
             case 'dashboard':
             case 'home':
                 setView('dashboard')
                 break;
-
             case 'clear':
-                // Delete all completed tasks
                 setItems(prev => prev.filter(t => !t.done))
                 break;
-            
             case 'goto':
                 if (arg1 === 'today') {
                     const now = new Date()
@@ -323,19 +274,35 @@ function App() {
                     setViewDate(now)
                 }
                 break;
-
             default:
-                // Optional: Show error toast "Command not found"
                 console.warn("Unknown command")
         }
     } else {
-        // 2. It's just a normal task
         handleAddTask(input)
     }
   }
 
+  const handleSaveDescription = (id, newDescription) => {
+      // Check if this is a "Composite ID" (String with underscore) -> Notebook
+      if (typeof id === 'string' && id.includes('_')) {
+          // It's a daily class note
+          setNotebooks(prev => {
+              const exists = prev.find(n => n.id === id)
+              if (exists) {
+                  return prev.map(n => n.id === id ? { ...n, content: newDescription } : n)
+              } else {
+                  return [...prev, { id, content: newDescription }]
+              }
+          })
+      } else {
+          // It's a standard task ID (Number) -> Standard Description
+          setItems(prev => prev.map(t => t.id === id ? { ...t, description: newDescription } : t))
+      }
+      setScratchpadTask(null)
+  }
+
   return (
-    <div className="h-screen w-screen flex flex-col p-4 pt-1 overflow-hidden bg-tokyo-base text-tokyo-text font-mono relative">
+    <div className="h-screen w-screen flex flex-col p-4 pt-1 overflow-hidden font-mono relative transition-colors duration-500 text-tokyo-text" style={appStyle}>
       
       {/* NAV BAR */}
       <div className="h-10 flex items-center justify-between mb-2 select-none" style={{WebkitAppRegion: 'drag'}}>
@@ -352,55 +319,44 @@ function App() {
             </button>
         </div>
         <div className="flex items-center gap-4 ml-auto" style={{WebkitAppRegion: 'no-drag'}}>
-            {/* Settings Button */}
-            <button 
-               onClick={() => setShowSettings(true)} 
-               className="text-tokyo-dim hover:text-tokyo-text transition"
-            >
+            
+            {view === 'dashboard' && (
+                <button 
+                    onClick={() => setShowJournal(!showJournal)}
+                    className={`transition ${showJournal ? 'text-tokyo-cyan' : 'text-tokyo-dim'}`}
+                    title="Toggle Journal Sidebar"
+                >
+                    <Sidebar size={16} />
+                </button>
+            )}
+
+            <button onClick={() => setShowSettings(true)} className="text-tokyo-dim hover:text-tokyo-text transition">
                <Settings size={16} />
             </button>
-            
-            <button 
-               onClick={() => window.db.minimizeWindow()} 
-               className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded"
-            >
+            <button onClick={() => window.db.minimizeWindow()} className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded">
                <Minus size={16} />
             </button>
-
-            {/* MAXIMIZE / RESTORE BUTTON */}
-            <button 
-               onClick={() => window.db.maximizeWindow()} 
-               className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded"
-               title={isMaximized ? "Restore" : "Maximize"}
-            >
+            <button onClick={() => window.db.maximizeWindow()} className="text-tokyo-dim hover:text-tokyo-text transition p-1 hover:bg-tokyo-highlight/50 rounded">
                {isMaximized ? <Copy size={16} /> : <Square size={16} />}
             </button>
-            
-            {/* CLOSE BUTTON */}
-            <button 
-               onClick={() => window.db.closeApp()} 
-               className="text-tokyo-dim hover:text-tokyo-red transition p-1 hover:bg-tokyo-red/10 rounded"
-               title="Close to Tray"
-            >
+            <button onClick={() => window.db.closeApp()} className="text-tokyo-dim hover:text-tokyo-red transition p-1 hover:bg-tokyo-red/10 rounded">
                <X size={18} />
             </button>
         </div>
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 min-h-0 relative z-0">
+      <div className="flex-1 min-h-0 relative z-0 flex gap-4">
         {view === 'dashboard' && (
-            <div className="h-full grid grid-cols-dashboard gap-4">
-                {/* LEFT PANE */}
-                <div className="flex flex-col gap-2 h-full min-h-0">
+            <>
+                {/* LEFT PANE (Calendar) */}
+                <div className={`flex flex-col gap-2 h-full min-h-0 transition-all duration-300 ${showJournal ? 'w-[70%]' : 'w-full'}`}>
                     <div className="flex justify-between items-center bg-tokyo-surface/20 p-2 rounded border border-tokyo-highlight">
-                        <div className="flex gap-2 items-center">
-                            {/* ARROWS - NOW ALWAYS VISIBLE FOR BOTH VIEWS */}
+                         <div className="flex gap-2 items-center">
                             <div className="flex gap-1 mr-2">
                                 <button onClick={handlePrev} className="p-1 hover:text-tokyo-cyan"><ChevronLeft size={14} /></button>
                                 <button onClick={handleNext} className="p-1 hover:text-tokyo-cyan"><ChevronRight size={14} /></button>
                             </div>
-
                             <button onClick={() => setCalendarView('month')} className={`text-sm px-2 py-1 rounded transition ${calendarView === 'month' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>MONTH</button>
                             <button onClick={() => setCalendarView('week')} className={`text-sm px-2 py-1 rounded transition ${calendarView === 'week' ? 'bg-tokyo-cyan text-tokyo-base font-bold' : 'text-tokyo-dim hover:text-tokyo-text'}`}>WEEK</button>
                         </div>
@@ -419,23 +375,27 @@ function App() {
                             <WeeklyView 
                                 currentDate={viewDate} 
                                 items={items} 
-                                onSelectItem={openEditModal} // Clicking event in Grid opens edit
+                                onSelectItem={openEditModal} 
                             />
                         )}
                     </div>
                 </div>
 
-                {/* RIGHT PANE */}
-                <JournalSidebar 
-                    tasks={visibleTasks} 
-                    onAddTask={handleCommandInput}
-                    onToggleTask={handleToggleTask}
-                    onEditTask={openEditModal}
-                    onOpenScratchpad={setScratchpadTask}
-                    viewMode={taskViewMode}
-                    onToggleMode={setTaskViewMode}
-                />
-            </div>
+                {/* RIGHT PANE (Journal) */}
+                {showJournal && (
+                    <div className="w-[30%] h-full min-h-0">
+                        <JournalSidebar 
+                            tasks={visibleTasks} 
+                            onAddTask={handleCommandInput}
+                            onToggleTask={handleToggleTask}
+                            onEditTask={openEditModal}
+                            onOpenScratchpad={setScratchpadTask}
+                            viewMode={taskViewMode}
+                            onToggleMode={setTaskViewMode}
+                        />
+                    </div>
+                )}
+            </>
         )}
 
         {view === 'focus' && (
@@ -449,24 +409,34 @@ function App() {
         )}
       </div>
 
-      {showSettings && <SettingsModal settings={settings} onSave={(s) => { setSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal 
+            settings={settings} 
+            onSave={(newSettings) => { 
+                setSettings(newSettings); 
+                setShowSettings(false);
+                window.db.setItems('settings', newSettings) 
+            }} 
+            onClose={() => setShowSettings(false)} 
+        />
+      )}
       
       {showEventModal && (
         <EventModal 
             selectedDate={selectedDate} 
             initialData={editingItem} 
+            notebooks={notebooks} 
+
             onSave={handleSaveItem} 
             onDelete={handleDeleteItem}
             onClose={() => setShowEventModal(false)}
-            // Add this new prop:
             onOpenScratchpad={(task) => {
-                setShowEventModal(false) // Close the small modal
-                setScratchpadTask(task)  // Open the big modal
+                setShowEventModal(false) 
+                setScratchpadTask(task)
             }} 
         />
-      )}  
+      )}
 
-      {/* Add the Scratchpad Modal conditionally */}
       {scratchpadTask && (
           <ScratchpadModal 
               task={scratchpadTask}

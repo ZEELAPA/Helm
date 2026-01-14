@@ -88,7 +88,6 @@ const TaskItem = ({ task, onToggle, onEdit, onOpenScratchpad }) => {
 
 const JournalSidebar = ({ tasks, onAddTask, onToggleTask, onEditTask, onOpenScratchpad, viewMode, onToggleMode }) => { 
   return (
-    // FIX: Removed the nested w-[35%] div that was breaking layout.
     // The sidebar now fills the Grid Area defined in App.jsx
     <div className="h-full bg-tokyo-surface/20 rounded-lg border border-tokyo-highlight flex flex-col backdrop-blur-sm overflow-hidden">
         

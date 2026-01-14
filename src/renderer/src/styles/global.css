@@ -2,17 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom Scrollbar to match the aesthetic */
-::-webkit-scrollbar {
-  width: 8px;
+:root {
+  /* IMPORTANT: These must be pure numbers (e.g., "26 27 38", NOT "#1a1b26") */
+  --bg-base: 26 27 38;
+  --bg-surface: 36 40 59;
+  --bg-highlight: 65 72 104;
+  
+  --text-main: 169 177 214;
+  --text-dim: 86 95 137;
+
+  --color-red: 247 118 142;
+  --color-orange: 255 158 100;
+  --color-yellow: 224 175 104;
+  --color-green: 158 206 106;
+  --color-cyan: 125 207 255;
+  --color-blue: 122 162 247;
+  --color-purple: 187 154 247;
+  --color-magenta: 255 0 124;
+  --color-teal: 26 188 156;
 }
-::-webkit-scrollbar-track {
-  background: #1a1b26; 
+
+body {
+    /* We manually wrap the variable in rgb() here */
+    background-color: rgb(var(--bg-base)); 
+    color: rgb(var(--text-main));
 }
-::-webkit-scrollbar-thumb {
-  background: #414868; 
-  border-radius: 4px;
+
+.bg-custom-overlay {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #565f89; 
-}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: rgb(var(--bg-base)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--bg-highlight)); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--text-dim)); }

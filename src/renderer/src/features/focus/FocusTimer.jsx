@@ -80,7 +80,7 @@ const FocusTimer = ({ logic, defaultDuration, breakDuration, settings, onPopOut 
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="h-full w-full bg-tokyo-base flex flex-col items-center justify-center text-tokyo-text select-none relative"
+      className="h-full w-full flex flex-col items-center justify-center text-tokyo-text select-none relative"
     >
       {/* Page Header */}
       <div className="absolute top-0 w-full flex flex-col items-center pt-8">
