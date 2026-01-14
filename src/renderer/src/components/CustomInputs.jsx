@@ -5,20 +5,21 @@ import { Calendar as CalIcon, Clock, ChevronLeft, ChevronRight } from 'lucide-re
 
 // --- HELPER: Portal Logic ---
 const PortalPopup = ({ children, onClose }) => {
-    // Close on scroll or resize to prevent floating UI drifting
+    // FIX: Removed the 'scroll' listener. 
+    // It was detecting the scroll *inside* the dropdown and closing it.
     useEffect(() => {
-        const handleEvent = () => onClose()
-        window.addEventListener('scroll', handleEvent, true)
-        window.addEventListener('resize', handleEvent)
+        const handleResize = () => onClose()
+        window.addEventListener('resize', handleResize)
         return () => {
-            window.removeEventListener('scroll', handleEvent, true)
-            window.removeEventListener('resize', handleEvent)
+            window.removeEventListener('resize', handleResize)
         }
     }, [])
 
     return createPortal(
         <>
+            {/* Invisible backdrop to catch clicks outside */}
             <div className="fixed inset-0 z-[9998]" onClick={onClose}></div>
+            {/* The actual popup content */}
             <div className="fixed z-[9999]" style={{ isolation: 'isolate' }}>
                 {children}
             </div>
@@ -46,7 +47,6 @@ export const CustomDatePicker = ({ value, onChange }) => {
   const toggleOpen = () => {
       if (!isOpen && triggerRef.current) {
           const rect = triggerRef.current.getBoundingClientRect()
-          // Calculate position so it floats exactly below the input
           setCoords({ top: rect.bottom + 5, left: rect.left })
       }
       setIsOpen(!isOpen)
@@ -59,7 +59,6 @@ export const CustomDatePicker = ({ value, onChange }) => {
 
   return (
     <>
-      {/* The Input Trigger */}
       <div 
         ref={triggerRef}
         onClick={toggleOpen}
@@ -69,22 +68,18 @@ export const CustomDatePicker = ({ value, onChange }) => {
         <span className="text-sm text-tokyo-text">{format(selectedDate, 'MMM dd, yyyy')}</span>
       </div>
 
-      {/* The Portal Popup */}
       {isOpen && (
         <PortalPopup onClose={() => setIsOpen(false)}>
           <div 
             className="w-64 bg-tokyo-base border border-tokyo-cyan shadow-2xl p-2 animate-in fade-in zoom-in-95 duration-100"
             style={{ position: 'fixed', top: coords.top, left: coords.left }}
           >
-            
-            {/* Nav Header */}
             <div className="flex justify-between items-center mb-2 px-1">
                 <button onClick={(e) => {e.stopPropagation(); setViewDate(subMonths(viewDate, 1))}} className="hover:text-tokyo-cyan"><ChevronLeft size={16}/></button>
                 <span className="text-xs font-bold text-tokyo-cyan uppercase">{format(viewDate, 'MMMM yyyy')}</span>
                 <button onClick={(e) => {e.stopPropagation(); setViewDate(addMonths(viewDate, 1))}} className="hover:text-tokyo-cyan"><ChevronRight size={16}/></button>
             </div>
 
-            {/* Grid */}
             <div className="grid grid-cols-7 gap-1 text-center">
                 {['S','M','T','W','T','F','S'].map(d => (
                     <div key={d} className="text-[10px] text-tokyo-dim font-bold">{d}</div>
