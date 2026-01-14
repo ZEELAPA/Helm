@@ -6,19 +6,31 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
   const weekDays = [...Array(7)].map((_, i) => addDays(startOfCurrentWeek, i))
   const hours = [...Array(24)].map((_, i) => i) 
 
+  // --- FIX: Explicit Color Mapping for Tailwind ---
+  const colorLookup = {
+      green:   { bg: 'bg-tokyo-green/20',   border: 'border-tokyo-green',   text: 'text-tokyo-green' },
+      teal:    { bg: 'bg-tokyo-teal/20',    border: 'border-tokyo-teal',    text: 'text-tokyo-teal' },
+      cyan:    { bg: 'bg-tokyo-cyan/20',    border: 'border-tokyo-cyan',    text: 'text-tokyo-cyan' },
+      blue:    { bg: 'bg-tokyo-blue/20',    border: 'border-tokyo-blue',    text: 'text-tokyo-blue' },
+      purple:  { bg: 'bg-tokyo-purple/20',  border: 'border-tokyo-purple',  text: 'text-tokyo-purple' },
+      magenta: { bg: 'bg-tokyo-magenta/20', border: 'border-tokyo-magenta', text: 'text-tokyo-magenta' },
+      pink:    { bg: 'bg-tokyo-red/20',     border: 'border-tokyo-red',     text: 'text-tokyo-red' },
+      red:     { bg: 'bg-tokyo-red/20',     border: 'border-tokyo-red',     text: 'text-tokyo-red' },
+      orange:  { bg: 'bg-tokyo-orange/20',  border: 'border-tokyo-orange',  text: 'text-tokyo-orange' },
+      yellow:  { bg: 'bg-tokyo-yellow/20',  border: 'border-tokyo-yellow',  text: 'text-tokyo-yellow' },
+  }
+
   const getStylePosition = (startTime, endTime, type) => {
         if (!startTime) return { top: '0px', height: '0px' }
 
         const [startH, startM] = startTime.split(':').map(Number)
         const startMinutes = (startH * 60) + startM
         
-        // FIX: Ensure tasks always have a default height if no endTime is set (which is now enforced)
         let endMinutes;
         if (endTime && type !== 'task') {
             const [endH, endM] = endTime.split(':').map(Number)
             endMinutes = (endH * 60) + endM
         } else {
-            // Force 30 min height for tasks
             endMinutes = startMinutes + 30 
         }
 
@@ -33,7 +45,6 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
   const getItemsForDay = (dayDate) => {
     return items.filter(item => {
         const checkDate = startOfDay(dayDate)
-        
         if (item.repeats === 'weekly') {
              if (item.dayOfWeek !== dayDate.getDay()) return false;
              if (item.repeatStart && checkDate < startOfDay(new Date(item.repeatStart))) return false;
@@ -45,7 +56,6 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
     })
   }
 
-  // ... (Return logic is same, update mapping below for colors)
   return (
     <div className="flex flex-col h-full overflow-hidden text-xs select-none">
       {/* Header Row */}
@@ -59,14 +69,14 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
         ))}
       </div>
 
+      {/* Grid */}
       <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-tokyo-base/30">
         <div className="grid grid-cols-[50px_repeat(7,1fr)] grid-rows-[repeat(24,60px)]">
+            {/* Time Labels (AM/PM) */}
             <div className="row-span-full border-r border-tokyo-highlight bg-tokyo-base/50 z-30 sticky left-0 shadow-lg">
                 {hours.map(h => {
-                    // Logic to convert 0-23 to 12 AM/PM
                     const ampm = h >= 12 ? 'PM' : 'AM'
                     const displayHour = h % 12 || 12 
-                    
                     return (
                         <div key={h} className="h-[60px] border-b border-tokyo-surface text-[10px] text-tokyo-dim text-right pr-2 pt-1">
                             {displayHour} {ampm}
@@ -75,6 +85,7 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
                 })}
             </div>
 
+            {/* Columns */}
             {weekDays.map((day, dayIndex) => {
                 const dayEvents = getItemsForDay(day)
                 return (
@@ -86,10 +97,13 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
                             const stylePos = getStylePosition(event.startTime, event.endTime, event.type)
                             const zIndex = isTask ? 'z-20' : 'z-10'
                             
-                            // Dynamic Colors
-                            const color = event.color || 'green'
-                            const taskStyle = `left-1 right-1 bg-tokyo-surface border-l-4 border-tokyo-${color} shadow-lg shadow-black/50`
-                            const eventStyle = `inset-x-0 bg-tokyo-${color}/20 border-l-2 border-tokyo-${color} text-tokyo-${color}`
+                            // --- FIX: USE LOOKUP TABLE ---
+                            const colorKey = event.color || 'green'
+                            const theme = colorLookup[colorKey] || colorLookup['green']
+
+                            const taskStyle = `left-1 right-1 bg-tokyo-surface border-l-4 ${theme.border} shadow-lg shadow-black/50`
+                            const eventStyle = `inset-x-0 ${theme.bg} border-l-2 ${theme.border} ${theme.text}`
+                            
                             const taskText = event.done ? "text-tokyo-dim line-through decoration-tokyo-red" : "text-tokyo-text font-bold"
 
                             return (
@@ -97,11 +111,22 @@ const WeeklyView = ({ currentDate, items, onSelectItem }) => {
                                     key={event.id}
                                     onClick={(e) => { e.stopPropagation(); onSelectItem(event); }}
                                     className={`absolute rounded p-2 overflow-hidden cursor-pointer hover:brightness-110 flex flex-col leading-tight transition-all ${zIndex} ${isTask ? taskStyle : eventStyle}`}
-                                    style={{ top: stylePos.top, height: stylePos.height }}
+                                    style={{
+                                         top: stylePos.top,
+                                        height: stylePos.height
+                                    }}
                                 >
                                     <div className="flex justify-between items-start gap-1">
-                                        <span className={isTask ? taskText : "font-bold"}>{event.title}</span>
+                                        <span className={isTask ? taskText : "font-bold"}>
+                                            {event.title}
+                                        </span>
                                     </div>
+                                    
+                                    {parseInt(stylePos.height) > 35 && (
+                                        <span className="opacity-70 text-[9px] mt-1 font-mono block">
+                                            {event.startTime}
+                                        </span>
+                                    )}
                                 </div>
                             )
                         })}

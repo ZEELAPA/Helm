@@ -1,5 +1,5 @@
 import React from 'react'
-import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, isWithinInterval, startOfDay } from 'date-fns'
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, format, isSameMonth, isSameDay, startOfDay } from 'date-fns'
 
 const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
   const monthStart = startOfMonth(viewDate)
@@ -9,27 +9,29 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate })
 
+  // --- FIX: Explicit Color Mapping ---
+  const dotColors = {
+      green: 'bg-tokyo-green',
+      teal: 'bg-tokyo-teal',
+      cyan: 'bg-tokyo-cyan',
+      blue: 'bg-tokyo-blue',
+      purple: 'bg-tokyo-purple',
+      magenta: 'bg-tokyo-magenta',
+      pink: 'bg-tokyo-red',
+      red: 'bg-tokyo-red',
+      orange: 'bg-tokyo-orange',
+      yellow: 'bg-tokyo-yellow',
+  }
+
   const getItemsForDay = (dayDate) => {
     const dayItems = items.filter(item => {
         const checkDate = startOfDay(dayDate)
-
-        // 1. Weekly Repeats with optional Range check
         if (item.repeats === 'weekly') {
             const isCorrectDay = item.dayOfWeek === dayDate.getDay();
-            
-            // Check Start Range
-            if (item.repeatStart) {
-                if (checkDate < startOfDay(new Date(item.repeatStart))) return false;
-            }
-            // Check End Range
-            if (item.repeatEnd) {
-                if (checkDate > startOfDay(new Date(item.repeatEnd))) return false;
-            }
-            
+            if (item.repeatStart && checkDate < startOfDay(new Date(item.repeatStart))) return false;
+            if (item.repeatEnd && checkDate > startOfDay(new Date(item.repeatEnd))) return false;
             return isCorrectDay;
         }
-
-        // 2. Specific Date
         if (item.date) return isSameDay(new Date(item.date), dayDate)
         return false
     })
@@ -40,10 +42,8 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
     }
   }
 
-  // ... (Rest of the render return is largely the same, just keeping the map loop) ...
   return (
     <div className="flex flex-col h-full overflow-hidden select-none">
-       {/* ... Header and Weekday Row code ... */}
       <div className="p-4 flex justify-between items-baseline border-b border-tokyo-surface bg-tokyo-base/50">
         <h2 className="text-2xl font-bold text-tokyo-blue tracking-wider uppercase font-mono ">
           {format(viewDate, 'MMMM yyyy')}
@@ -88,7 +88,8 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
                         {events.slice(0, 8).map((item, i) => (
                             <div 
                                 key={item.id || i} 
-                                className={`w-1.5 h-1.5 rounded-full bg-tokyo-${item.color || 'green'} shadow-sm`}
+                                // --- FIX: Use Lookup ---
+                                className={`w-1.5 h-1.5 rounded-full ${dotColors[item.color || 'green']} shadow-sm`}
                                 title={`Event: ${item.title}`}
                             />
                         ))}
@@ -98,7 +99,12 @@ const CalendarGrid = ({ viewDate, selectedDate, items = [], onSelectDate }) => {
                         {tasks.slice(0, 8).map((item, i) => (
                             <div 
                                 key={item.id || i} 
-                                className={`w-1.5 h-1.5 rounded-full box-border ${item.done ? 'border border-tokyo-dim opacity-50' : `bg-tokyo-${item.color || 'purple'}`}`}
+                                className={`w-1.5 h-1.5 rounded-full box-border ${
+                                    item.done 
+                                    ? 'border border-tokyo-dim opacity-50' 
+                                    // --- FIX: Use Lookup ---
+                                    : dotColors[item.color || 'purple']
+                                }`}
                                 title={`Task: ${item.title}`}
                             />
                         ))}
